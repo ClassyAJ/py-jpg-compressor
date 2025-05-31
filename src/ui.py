@@ -7,8 +7,17 @@ console = Console(stderr=True)
 logging.basicConfig(
     level="INFO",
     format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(console=console, rich_tracebacks=True, show_path=False)],
+    datefmt=None,
+    handlers=[
+        RichHandler(
+            console=console,
+            rich_tracebacks=True,
+            show_path=False,
+            markup=True,
+            show_time=False,
+            show_level=True,
+        )
+    ],
 )
 logger: logging.Logger = logging.getLogger(name="image_tool")
 

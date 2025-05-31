@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Optional
 from typer import Typer, Option, Exit
 from typing_extensions import Annotated
+from rich.markup import escape as escape_markup
 
-from . import config
-from . import ui
-from . import utils
-from .image_processing import find_image_files, run_batch_processing
+from src import config
+from src import ui
+from src import utils
+from src.image_processing import find_image_files, run_batch_processing
 
 app: Typer = Typer(
     name=config.APP_NAME,
@@ -25,7 +25,7 @@ def process(
             "--input-format",
             "-i",
             help=(
-                f"Input image format(s). Use '{config.ALL_FORMATS_KEYWORD}'"
+                f"Input image format(s). Use '{config.ALL_FORMATS_KEYWORD}' "
                 "for all supported, or e.g., 'png', 'jpg'."
             ),
             prompt=f"Enter input format ({config.ALL_FORMATS_KEYWORD}, png, jpg, etc.)",
@@ -49,7 +49,7 @@ def process(
         ),
     ] = config.DEFAULT_QUALITY,
     width: Annotated[
-        Optional[int],
+        int | None,
         Option(
             "--width",
             "-W",
@@ -61,7 +61,7 @@ def process(
         ),
     ] = None,
     height: Annotated[
-        Optional[int],
+        int | None,
         Option(
             "--height",
             "-H",
@@ -72,8 +72,19 @@ def process(
             min=1,
         ),
     ] = None,
+    force_aspect_ratio: Annotated[
+        bool,
+        Option(
+            "--force-aspect-ratio/--preserve-aspect-ratio",
+            help=(
+                "Force resize to exact width and height, potentially changing aspect ratio. "
+                "Only applies if --width and --height are set. "
+                "Defaults to preserving aspect ratio."
+            ),
+        ),
+    ] = False,
     input_dir_path: Annotated[
-        Optional[Path],
+        Path | None,
         Option(
             "--input-folder",
             "-if",
@@ -82,7 +93,7 @@ def process(
         ),
     ] = None,
     output_dir_path: Annotated[
-        Optional[Path],
+        Path | None,
         Option(
             "--output-folder",
             "-of",
@@ -98,6 +109,7 @@ def process(
     Compresses and/or resizes images from an input folder to an output folder.
     Supports formats: PNG, JPG/JPEG, WEBP, TIFF, BMP, GIF, APNG, HEIC/HEIF (requires pillow-heif).
     Use '--input-format all' to process all supported input types.
+    To resize, specify --width AND --height. Use --force-aspect-ratio to distort if needed.
     """
     ui.print_rule(title=f"{config.APP_NAME}")
 
@@ -126,6 +138,11 @@ def process(
         )
         raise Exit(code=1)
 
+    if force_aspect_ratio and not target_resolution:
+        ui.print_warning(
+            message="--force-aspect-ratio is specified, but --width and --height are not. "
+            "The flag will be ignored."
+        )
     actual_input_dir: Path = (
         input_dir_path if input_dir_path else config.DEFAULT_INPUT_PATH
     )
@@ -142,14 +159,26 @@ def process(
     ui.print_info(
         message=(
             f"Output format: {output_format_details['pillow_format']} "
-            "(as {output_file_extension})"
+            f"(as {output_file_extension})"
         )
     )
     ui.print_info(message=f"Quality: {quality}")
+
     if target_resolution:
-        ui.print_info(
-            message=f"Target resolution: {target_resolution[0]}x{target_resolution[1]}"
+        w_str: str = f"[repr.number]{target_resolution[0]}[/repr.number]"
+        h_str: str = f"[repr.number]{target_resolution[1]}[/repr.number]"
+
+        resize_mode_text: str = (
+            "exact (aspect ratio forced)"
+            if force_aspect_ratio
+            else "fit (aspect ratio preserved)"
         )
+        message_string: str = (
+            f"Target resolution: {w_str}x{h_str} "
+            f"\\[{escape_markup(markup=resize_mode_text)}]"
+        )
+        ui.print_info(message=message_string)
+
     else:
         ui.print_info(message="Target resolution: Original")
 
@@ -172,6 +201,7 @@ def process(
         output_file_extension=output_file_extension,
         quality=quality,
         target_resolution=target_resolution,
+        force_aspect_ratio=(force_aspect_ratio if target_resolution else False),
     )
 
     ui.print_rule(title="Processing Complete")
